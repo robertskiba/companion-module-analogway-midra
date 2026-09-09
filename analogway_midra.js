@@ -1,5 +1,6 @@
 import { InstanceBase, Regex, InstanceStatus, TCPHelper } from '@companion-module/base'
 import net from 'net'
+import { getFeedbacks } from './feedbacks.js'
 
 class MidraInstance extends InstanceBase {
 	constructor(internal) {
@@ -17,9 +18,34 @@ class MidraInstance extends InstanceBase {
 		this.modelnum
 		this.modelname = ''
 
+		// Per-screen memory tracking (2 screens: S1, S2). 255 means "no memory loaded",
+		// matching the device's own sentinel value. See updatePresetMemories().
+		this.memoriesBuf0 = [255, 255]
+		this.memoriesBuf1 = [255, 255]
+		this.programBuffer = [0, 0]
+		this.memoriesPGM = [255, 255]
+		this.memoriesPVW = [255, 255]
+
 		self.init_actions() // export actions
+		self.setFeedbackDefinitions(getFeedbacks(self))
 		self.init_tcp()
 		self.init_gateway()
+	}
+
+	//Derives which memory is currently in program/preview per screen from the raw
+	//per-buffer memory identity (memoriesBuf0/1) and the take/t-bar status (programBuffer).
+	updatePresetMemories() {
+		let self = this
+		for (let screen = 0; screen < 2; screen += 1) {
+			if (self.programBuffer[screen] === 0) {
+				self.memoriesPGM[screen] = self.memoriesBuf0[screen]
+				self.memoriesPVW[screen] = self.memoriesBuf1[screen]
+			} else {
+				self.memoriesPGM[screen] = self.memoriesBuf1[screen]
+				self.memoriesPVW[screen] = self.memoriesBuf0[screen]
+			}
+		}
+		self.checkFeedbacks('memory_active')
 	}
 
 	// Splits a raw TCP byte stream into whole \r\n-terminated lines, buffering
@@ -107,6 +133,28 @@ class MidraInstance extends InstanceBase {
 					//There is no parameter readback runnning, it can be started now
 				}
 
+				if (line.match(/PIpid\d+,0,\d+$/)) {
+					//Information about the memory loaded into preset buffer 0 of a screen
+					const [screen, , memory] = line.replace('PIpid', '').split(',')
+					self.memoriesBuf0[Number(screen)] = Number(memory)
+					self.updatePresetMemories()
+				}
+				if (line.match(/PIpid\d+,1,\d+$/)) {
+					//Information about the memory loaded into preset buffer 1 of a screen
+					const [screen, , memory] = line.replace('PIpid', '').split(',')
+					self.memoriesBuf1[Number(screen)] = Number(memory)
+					self.updatePresetMemories()
+				}
+				if (line.match(/(SPCtb|GCtba)\d+,\d+$/)) {
+					//Take/t-bar status: which preset buffer (0 or 1) is currently live in program for a screen.
+					//SPCtb is the settled position after a discrete take (0 or 65535); GCtba is the live
+					//analog position while a t-bar is being dragged, same value range. A take swaps
+					//program/preview without re-announcing PIpid, so this has to be tracked separately.
+					const command = line.match(/SPCtb/) ? 'SPCtb' : 'GCtba'
+					const [screen, value] = line.replace(command, '').split(',')
+					self.programBuffer[Number(screen)] = Number(value) < 32768 ? 0 : 1
+					self.updatePresetMemories()
+				}
 
 				if (line.match(/E\d{2}/)) {
 					switch (parseInt(line.match(/E(\d{2})/)[1])) {
