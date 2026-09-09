@@ -52,8 +52,8 @@ class MidraInstance extends InstanceBase {
 				let i = 0, line = '', offset = 0
 				receivebuffer += chunk
 				while ( (i = receivebuffer.indexOf('\r\n', offset)) !== -1) {
-					line = receivebuffer.substring(offset, i - offset)
-					offset = i + 1
+					line = receivebuffer.substring(offset, i)
+					offset = i + 2
 					self.socket.emit('receiveline', line.toString())
 				}
 				receivebuffer = receivebuffer.substring(offset)
