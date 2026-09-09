@@ -3,7 +3,7 @@
 	"legacy": [
 		"analogway_midra"
 	],
-	"version": "2.1beta1",
+	"version": "2.1.0-beta1",
 	"type": "module",
 	"main": "analogway_midra.js",
 	"scripts": {
