@@ -1,11 +1,11 @@
-const { InstanceBase, Regex, runEntrypoint, InstanceStatus, TCPHelper } = require('@companion-module/base')
+import { InstanceBase, Regex, InstanceStatus, TCPHelper } from '@companion-module/base'
 
 class MidraInstance extends InstanceBase {
 	constructor(internal) {
 		super(internal)
 	}
 
-	init(config) {
+	async init(config, isFirstInit, secrets) {
 		let self = this
 
 		self.config = config
@@ -110,7 +110,7 @@ class MidraInstance extends InstanceBase {
 		}
 	}
 
-	configUpdated(config) {
+	async configUpdated(config, secrets) {
 		const self = this
 		if (
 			(config.host && config.host !== self.config.host) ||
@@ -118,8 +118,8 @@ class MidraInstance extends InstanceBase {
 		) {
 			self.log('debug', 'Config updated, destroying and reiniting..')
 			self.config = config
-			self.destroy()
-			self.init(self.config)
+			await self.destroy()
+			await self.init(self.config, false, secrets)
 		}
 	}
 
@@ -158,7 +158,7 @@ class MidraInstance extends InstanceBase {
 	}
 
 	// When module gets deleted
-	destroy() {
+	async destroy() {
 		let self = this
 
 		if (self.socket !== undefined) {
@@ -676,4 +676,4 @@ class MidraInstance extends InstanceBase {
 	}
 }
 
-runEntrypoint(MidraInstance, [])
+export default MidraInstance
